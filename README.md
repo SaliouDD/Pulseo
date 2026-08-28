@@ -14,6 +14,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 Vérifier ensuite `http://localhost:8000/health`.
 
+Le premier appel à `http://localhost:8000/feed` collecte quelques flux RSS et génère un lot de résumés Gemini. Configurez auparavant `backend/.env` en copiant `backend/.env.example` et en ajoutant votre clé Gemini. Le résultat est gardé 15 minutes en mémoire pour limiter les appels IA.
+
 ## Démarrer l'application mobile
 
 ```bash
@@ -27,4 +29,4 @@ Dans `.env`, utilisez l'adresse IP locale de votre ordinateur pour tester depuis
 
 ## État du MVP
 
-Le squelette permet déjà à l'application mobile d'appeler `GET /health`. PostgreSQL, RSS et Gemini restent volontairement hors du premier jalon.
+L'application mobile affiche un feed vertical de premières actualités réelles via `GET /feed`. PostgreSQL et le stockage persistant sont les prochaines étapes ; le premier feed est volontairement conservé en mémoire.

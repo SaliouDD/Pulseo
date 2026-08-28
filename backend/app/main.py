@@ -1,6 +1,7 @@
 """Minimal FastAPI entry point for the Pulseo MVP."""
 
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -9,6 +10,14 @@ import psycopg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+from app.schemas import FeedResponse
+from app.services.feed import feed_service
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# httpx includes full request URLs in its INFO logs. Gemini sends its API key as a
+# query parameter, so HTTP client traffic must never be emitted at this level.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 class HealthResponse(BaseModel):
@@ -50,3 +59,9 @@ app.add_middleware(
 async def health() -> HealthResponse:
     """Return API availability and check PostgreSQL only when configured."""
     return await asyncio.to_thread(database_status)
+
+
+@app.get("/feed", response_model=FeedResponse)
+async def feed() -> FeedResponse:
+    """Return a small cached feed; the first request collects RSS and calls Gemini once."""
+    return await feed_service.get_feed()
