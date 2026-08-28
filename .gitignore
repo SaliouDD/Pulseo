@@ -1,0 +1,22 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/*.py[cod]
+.pytest_cache/
+
+# JavaScript / Expo
+mobile/node_modules/
+mobile/.expo/
+mobile/web-build/
+mobile/.env.local
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+.DS_Store
