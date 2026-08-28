@@ -14,6 +14,7 @@ mobile/node_modules/
 mobile/.expo/
 mobile/web-build/
 mobile/.env.local
+supabase/.temp/
 
 # Editors and operating systems
 .vscode/
