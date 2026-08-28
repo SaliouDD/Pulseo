@@ -11,9 +11,11 @@ from email.utils import parsedate_to_datetime
 
 import feedparser
 import httpx
+import psycopg
 
 from app.ai.gemini import GeminiClient
-from app.config import FEED_CACHE_SECONDS
+from app.config import DATABASE_URL, FEED_CACHE_SECONDS
+from app.database.repository import StoredArticle, repository
 from app.schemas import FeedEvent, FeedResponse, Source
 
 logger = logging.getLogger(__name__)
@@ -113,6 +115,44 @@ class FeedService:
         articles.sort(key=lambda article: article.published_at or datetime.min.replace(tzinfo=UTC), reverse=True)
         articles = articles[:6]
         target_language = LANGUAGE_NAMES.get(language, language)
+
+        if DATABASE_URL:
+            try:
+                event_ids = await asyncio.to_thread(
+                    repository.store_articles,
+                    [
+                        StoredArticle(
+                            canonical_key=article.id,
+                            source_id=article.source.id,
+                            source_name=article.source.name,
+                            source_language=article.source.language,
+                            rss_url=article.source.rss_url,
+                            article_url=article.url,
+                            title=article.title,
+                            excerpt=article.excerpt,
+                            published_at=article.published_at,
+                        )
+                        for article in articles
+                    ],
+                )
+                missing_keys = await asyncio.to_thread(repository.missing_summary_keys, language, list(event_ids))
+                if missing_keys:
+                    summaries = await self._gemini.summarize(
+                        [
+                            {"id": article.id, "source": article.source.name, "title": article.title, "excerpt": article.excerpt}
+                            for article in articles if article.id in missing_keys
+                        ],
+                        target_language,
+                    )
+                    if summaries:
+                        await asyncio.to_thread(repository.store_summaries, language, summaries, event_ids)
+                stored_events = await asyncio.to_thread(repository.feed, language)
+                if stored_events:
+                    logger.info("Loaded %s persistent %s summaries from Supabase", len(stored_events), language)
+                    return [self._event_from_row(row) for row in stored_events]
+            except (psycopg.Error, RuntimeError) as error:
+                logger.warning("Supabase persistence unavailable; using temporary feed: %s", error)
+
         summaries = await self._gemini.summarize(
             [{"id": article.id, "source": article.source.name, "title": article.title, "excerpt": article.excerpt} for article in articles],
             target_language,
@@ -120,6 +160,20 @@ class FeedService:
         events = [self._to_event(article, summaries.get(article.id)) for article in articles]
         logger.info("Feed refreshed with %s events in %s", len(events), language)
         return events
+
+    @staticmethod
+    def _event_from_row(row: dict) -> FeedEvent:
+        return FeedEvent(
+            id=str(row["id"]),
+            title=str(row["title"]),
+            summary=str(row["summary"]),
+            why_it_matters=row["why_it_matters"],
+            category=str(row["category"]),
+            topics=list(row["topics"] or []),
+            importance=float(row["importance"]),
+            published_at=row["published_at"],
+            sources=[Source(**source) for source in row["sources"]],
+        )
 
     @staticmethod
     def _to_event(article: Article, generated: dict | None) -> FeedEvent:

@@ -17,17 +17,27 @@ create table public.sources (
 
 create table public.events (
   id uuid primary key default gen_random_uuid(),
+  canonical_key text not null unique,
+  importance numeric(3,2) not null default 0.50 check (importance between 0 and 1),
+  status text not null default 'published' check (status in ('draft', 'published', 'archived')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- One editorial version per event and output language, shared by all users.
+create table public.event_summaries (
+  event_id uuid not null references public.events(id) on delete cascade,
+  language text not null check (char_length(language) between 2 and 10),
   title text not null,
   summary text not null,
   why_it_matters text,
   category text not null default 'Actualité',
   topics text[] not null default '{}',
   entities text[] not null default '{}',
-  importance numeric(3,2) not null default 0.50 check (importance between 0 and 1),
-  language text not null default 'fr',
-  status text not null default 'published' check (status in ('draft', 'published', 'archived')),
+  generated_by text not null default 'gemini',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (event_id, language)
 );
 
 create table public.articles (
@@ -44,7 +54,7 @@ create table public.articles (
 
 create index articles_published_at_idx on public.articles (published_at desc);
 create index articles_event_id_idx on public.articles (event_id);
-create index events_language_created_at_idx on public.events (language, created_at desc);
+create index event_summaries_language_updated_at_idx on public.event_summaries (language, updated_at desc);
 
 create table public.event_sources (
   event_id uuid not null references public.events(id) on delete cascade,
@@ -78,4 +88,7 @@ create trigger sources_set_updated_at before update on public.sources
 for each row execute function public.set_updated_at();
 
 create trigger events_set_updated_at before update on public.events
+for each row execute function public.set_updated_at();
+
+create trigger event_summaries_set_updated_at before update on public.event_summaries
 for each row execute function public.set_updated_at();
