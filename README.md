@@ -16,6 +16,10 @@ Vérifier ensuite `http://localhost:8000/health`.
 
 Le premier appel à `http://localhost:8000/feed` collecte quelques flux RSS et génère un lot de résumés Gemini. Configurez auparavant `backend/.env` en copiant `backend/.env.example` et en ajoutant votre clé Gemini. Le résultat est gardé 15 minutes en mémoire pour limiter les appels IA.
 
+## Supabase
+
+La base PostgreSQL est hébergée par Supabase. Le schéma versionné se trouve dans `supabase/migrations/`; la configuration est décrite dans [docs/DATABASE.md](docs/DATABASE.md). Gardez `DATABASE_URL` uniquement dans `backend/.env`.
+
 ## Démarrer l'application mobile
 
 ```bash
