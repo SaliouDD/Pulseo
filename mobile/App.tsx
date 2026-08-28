@@ -13,7 +13,8 @@ const apiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
 const deviceLanguage = getLocales()[0]?.languageCode ?? 'fr';
 
 export default function App() {
-  const { height } = useWindowDimensions();
+  const { height: windowHeight } = useWindowDimensions();
+  const [pageHeight, setPageHeight] = useState(windowHeight);
   const [status, setStatus] = useState<FeedStatus>('loading');
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,6 +41,7 @@ export default function App() {
   };
 
   useEffect(() => { loadFeed(); }, []);
+  useEffect(() => { setPageHeight(windowHeight); }, [windowHeight]);
 
   if (status !== 'ready') {
     const message = status === 'unavailable'
@@ -55,13 +57,17 @@ export default function App() {
 
   return <>
     <FlatList
+      style={styles.feed}
       data={events}
       keyExtractor={(event) => event.id}
-      pagingEnabled
+      onLayout={({ nativeEvent }) => setPageHeight(Math.round(nativeEvent.layout.height))}
+      snapToInterval={pageHeight}
+      snapToAlignment="start"
+      decelerationRate="fast"
+      disableIntervalMomentum
       showsVerticalScrollIndicator={false}
-      getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadFeed(true)} tintColor="#FFFFFF" />}
-      renderItem={({ item }) => <NewsCard event={item} height={height} onSources={() => setSourceEvent(item)} />}
+      renderItem={({ item }) => <NewsCard event={item} height={pageHeight} onSources={() => setSourceEvent(item)} />}
     />
     <SourceSheet event={sourceEvent} onClose={() => setSourceEvent(null)} onSelect={setArticleSource} />
     <ArticleViewer source={articleSource} onClose={() => setArticleSource(null)} />
@@ -73,9 +79,9 @@ function NewsCard({ event, height, onSources }: { event: FeedEvent; height: numb
   return <View style={[styles.card, { height }]}>
     <View><Text style={styles.eyebrow}>{event.category.toUpperCase()}</Text><Text style={styles.cardBrand}>pulseo</Text></View>
     <View style={styles.story}>
-      <Text style={styles.title} numberOfLines={4}>{event.title}</Text>
-      <Text style={styles.summary} numberOfLines={9}>{event.summary}</Text>
-      {event.why_it_matters ? <Text style={styles.whyItMatters} numberOfLines={3}>Pourquoi c’est important — {event.why_it_matters}</Text> : null}
+      <Text style={styles.title}>{event.title}</Text>
+      <Text style={styles.summary}>{event.summary}</Text>
+      {event.why_it_matters ? <Text style={styles.whyItMatters}>Pourquoi c’est important — {event.why_it_matters}</Text> : null}
     </View>
     <View style={styles.footer}>
       <Pressable onPress={onSources} hitSlop={8}>
@@ -115,6 +121,7 @@ const styles = StyleSheet.create({
   brand: { color: '#FFFFFF', fontSize: 44, fontWeight: '800', letterSpacing: -2, marginTop: 24 },
   loadingText: { color: '#A8A8B3', fontSize: 17, marginTop: 8, textAlign: 'center' },
   retryButton: { borderColor: '#A78BFA', borderRadius: 100, borderWidth: 1, marginTop: 28, paddingHorizontal: 20, paddingVertical: 11 }, retryText: { color: '#DDD6FE', fontWeight: '700' },
+  feed: { flex: 1 },
   card: { backgroundColor: '#101014', justifyContent: 'space-between', overflow: 'hidden', paddingBottom: 44, paddingHorizontal: 28, paddingTop: 62 },
   eyebrow: { color: '#A78BFA', fontSize: 12, fontWeight: '800', letterSpacing: 1.1 }, cardBrand: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -1, marginTop: 10 }, story: { paddingVertical: 12 },
   title: { color: '#FFFFFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.8, lineHeight: 36 }, summary: { color: '#E5E5EA', fontSize: 17, lineHeight: 25, marginTop: 18 }, whyItMatters: { color: '#B7AEC9', fontSize: 14, lineHeight: 20, marginTop: 16 },
