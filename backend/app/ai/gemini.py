@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
-    async def summarize(self, articles: list[dict[str, str]]) -> dict[str, dict[str, Any]]:
+    async def summarize(self, articles: list[dict[str, str]], language: str) -> dict[str, dict[str, Any]]:
         """Summarise a batch, returning an empty mapping when Gemini is unavailable."""
         if not GEMINI_API_KEY:
             logger.warning("Gemini is not configured; RSS descriptions will be used")
@@ -21,7 +21,7 @@ class GeminiClient:
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
         payload = {
-            "contents": [{"parts": [{"text": build_batch_prompt(articles)}]}],
+            "contents": [{"parts": [{"text": build_batch_prompt(articles, language)}]}],
             "generationConfig": {
                 "temperature": 0.2,
                 "responseMimeType": "application/json",

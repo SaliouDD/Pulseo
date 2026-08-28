@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 import psycopg
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -62,6 +62,6 @@ async def health() -> HealthResponse:
 
 
 @app.get("/feed", response_model=FeedResponse)
-async def feed() -> FeedResponse:
-    """Return a small cached feed; the first request collects RSS and calls Gemini once."""
-    return await feed_service.get_feed()
+async def feed(language: str = Query(default="fr", min_length=2, max_length=10)) -> FeedResponse:
+    """Return a feed translated and summarised for the user's requested language."""
+    return await feed_service.get_feed(language.lower())

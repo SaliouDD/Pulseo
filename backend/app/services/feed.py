@@ -32,6 +32,14 @@ SOURCES = (
     RssSource("bbc", "BBC News", "en", "https://feeds.bbci.co.uk/news/world/rss.xml"),
 )
 
+LANGUAGE_NAMES = {
+    "fr": "français",
+    "en": "anglais",
+    "ar": "arabe",
+    "es": "espagnol",
+    "pt": "portugais",
+}
+
 
 @dataclass(frozen=True)
 class Article:
@@ -81,32 +89,37 @@ async def collect_source(source: RssSource) -> list[Article]:
 
 class FeedService:
     def __init__(self) -> None:
-        self._cache: list[FeedEvent] = []
-        self._generated_at: datetime | None = None
+        self._cache: dict[str, tuple[list[FeedEvent], datetime]] = {}
         self._lock = asyncio.Lock()
         self._gemini = GeminiClient()
 
-    async def get_feed(self) -> FeedResponse:
+    async def get_feed(self, language: str) -> FeedResponse:
         now = datetime.now(UTC)
-        if self._generated_at and now - self._generated_at < timedelta(seconds=FEED_CACHE_SECONDS):
-            return FeedResponse(items=self._cache, generated_at=self._generated_at, cached=True)
+        cached = self._cache.get(language)
+        if cached and now - cached[1] < timedelta(seconds=FEED_CACHE_SECONDS):
+            return FeedResponse(items=cached[0], generated_at=cached[1], cached=True)
 
         async with self._lock:
-            if self._generated_at and now - self._generated_at < timedelta(seconds=FEED_CACHE_SECONDS):
-                return FeedResponse(items=self._cache, generated_at=self._generated_at, cached=True)
-            await self.refresh()
-            return FeedResponse(items=self._cache, generated_at=self._generated_at or now, cached=False)
+            cached = self._cache.get(language)
+            if cached and now - cached[1] < timedelta(seconds=FEED_CACHE_SECONDS):
+                return FeedResponse(items=cached[0], generated_at=cached[1], cached=True)
+            events = await self.refresh(language)
+            generated_at = datetime.now(UTC)
+            self._cache[language] = (events, generated_at)
+            return FeedResponse(items=events, generated_at=generated_at, cached=False)
 
-    async def refresh(self) -> None:
+    async def refresh(self, language: str) -> list[FeedEvent]:
         articles = [article for source_articles in await asyncio.gather(*(collect_source(source) for source in SOURCES)) for article in source_articles]
         articles.sort(key=lambda article: article.published_at or datetime.min.replace(tzinfo=UTC), reverse=True)
         articles = articles[:6]
+        target_language = LANGUAGE_NAMES.get(language, language)
         summaries = await self._gemini.summarize(
-            [{"id": article.id, "source": article.source.name, "title": article.title, "excerpt": article.excerpt} for article in articles]
+            [{"id": article.id, "source": article.source.name, "title": article.title, "excerpt": article.excerpt} for article in articles],
+            target_language,
         )
-        self._cache = [self._to_event(article, summaries.get(article.id)) for article in articles]
-        self._generated_at = datetime.now(UTC)
-        logger.info("Feed refreshed with %s events", len(self._cache))
+        events = [self._to_event(article, summaries.get(article.id)) for article in articles]
+        logger.info("Feed refreshed with %s events in %s", len(events), language)
+        return events
 
     @staticmethod
     def _to_event(article: Article, generated: dict | None) -> FeedEvent:
